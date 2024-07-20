@@ -3,7 +3,8 @@ from aws_cdk import (
     Stack,
     aws_lambda as _lambda,
     aws_apigateway as apigateway,
-    aws_dynamodb as dynamodb
+    aws_dynamodb as dynamodb,
+    aws_s3 as s3,
     # aws_sqs as sqs,
 )
 from constructs import Construct
@@ -30,6 +31,8 @@ class ClosetApplicationStack(Stack):
         #         }
         #     ]
         # }
+        bucket = s3.Bucket(self, "ClosetApplication")
+
         table = dynamodb.Table(self, 'API_dynamodb',
                                partition_key=dynamodb.Attribute(name="UserID", type=dynamodb.AttributeType.STRING),
                                table_name="API_dynamodb_test")
@@ -42,10 +45,13 @@ class ClosetApplicationStack(Stack):
                                             code = _lambda.Code.from_asset('lambda'),
                                             handler = "my_lambda.handler",
                                             environment={
-                                                "TABLE_NAME":table.table_name
+                                                "TABLE_NAME":table.table_name,
+                                                "BUCKET_NAME":bucket.bucket_name
                                             } )
         
         table.grant_full_access(lambda_function)
+
+        bucket.grant_read_write(lambda_function)
 
         #API Gateway to hit Lambda Functions
         api = apigateway.RestApi(self, "MyAPI",
@@ -55,7 +61,6 @@ class ClosetApplicationStack(Stack):
         get_integration = apigateway.LambdaIntegration(lambda_function,
                                                        request_templates={'application/json': '{"statusCode": "200"}'})
         
-        api.root.add_method("GET", get_integration)
 
         items = api.root.add_resource("items")
         items.add_method("GET", get_integration)
