@@ -9,10 +9,16 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+#Find someway to login
+
 class ClosetApplicationStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        #User Resource
+        #Clothing Resource (Create, Update, Delete, Get)
+        #Photos?
 
         #Dynamo Table to keep track of users and clothes
         # {
@@ -40,29 +46,51 @@ class ClosetApplicationStack(Stack):
         #S3 to store photos of clothes
 
         #Lambda(s) to get and process the data
-        lambda_function = _lambda.Function(self, 'API_Handler',
+        user_lambda = _lambda.Function(self, 'API_Handler',
                                            runtime=_lambda.Runtime.PYTHON_3_11,
                                             code = _lambda.Code.from_asset('lambda'),
-                                            handler = "my_lambda.handler",
+                                            handler = "user_lambda.handler",
                                             environment={
                                                 "TABLE_NAME":table.table_name,
                                                 "BUCKET_NAME":bucket.bucket_name
                                             } )
         
-        table.grant_full_access(lambda_function)
+        clothing_lambda = _lambda.Function(self, 'API_Handler',
+                                           runtime=_lambda.Runtime.PYTHON_3_11,
+                                            code = _lambda.Code.from_asset('lambda'),
+                                            handler = "clothing_lambda.handler",
+                                            environment={
+                                                "TABLE_NAME":table.table_name,
+                                                "BUCKET_NAME":bucket.bucket_name
+                                            } )
+        
+        table.grant_full_access(user_lambda)
+        bucket.grant_read_write(user_lambda)
 
-        bucket.grant_read_write(lambda_function)
+        table.grant_full_access(clothing_lambda)
+        bucket.grant_read_write(clothing_lambda)
 
         #API Gateway to hit Lambda Functions
         api = apigateway.RestApi(self, "MyAPI",
                                  rest_api_name="closet_application",
                                  description="test api for the closet app")
         
-        get_integration = apigateway.LambdaIntegration(lambda_function,
+        user_integration = apigateway.LambdaIntegration(user_lambda,
                                                        request_templates={'application/json': '{"statusCode": "200"}'})
-        
 
-        items = api.root.add_resource("items")
-        items.add_method("GET", get_integration)
+        items = api.root.add_resource("users")
+        items.add_method("GET", user_integration)
+        items.add_method("POST", user_integration)
+        items.add_method("DELETE", user_integration)
+        items.add_method("PUT", user_integration)
+
+        clothing_integration = apigateway.LambdaIntegration(clothing_lambda,
+                                                       request_templates={'application/json': '{"statusCode": "200"}'})
+
+        items = api.root.add_resource("users")
+        items.add_method("GET", clothing_integration)
+        items.add_method("POST", clothing_integration)
+        items.add_method("DELETE", clothing_integration)
+        items.add_method("PUT", clothing_integration)
 
         #S3 to host the website files. They make calls to the API gateway API to get the data that is needed
